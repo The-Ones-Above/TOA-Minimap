@@ -1,0 +1,6 @@
+name: TOAMinimapAuth
+version: 1.0.1
+main: com.theonesabove.toaminimapauth.TOAMinimapAuthPlugin
+api-version: '26.2'
+authors: [The Ones Above]
+description: Authorises the TOA Minimap client mod on The Ones Above server.

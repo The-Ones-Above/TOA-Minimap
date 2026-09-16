@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "id": "toaminimap",
+  "version": "${version}",
+  "name": "TOA Minimap",
+  "description": "A fast, persistent client-rendered minimap and world map restricted to The Ones Above server.",
+  "authors": ["The Ones Above"],
+  "contact": {"homepage": "https://theonesabove.com"},
+  "license": "ARR",
+  "environment": "client",
+  "entrypoints": {"client": ["com.theonesabove.minimap.ToaMinimapClient"]},
+  "depends": {
+    "fabricloader": ">=0.19.3",
+    "minecraft": "=26.2",
+    "java": ">=25",
+    "fabric-api": "*"
+  }
+}

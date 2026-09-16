@@ -1,0 +1,80 @@
+plugins {
+    id 'net.fabricmc.fabric-loom' version "${loom_version}"
+    id 'maven-publish'
+}
+
+version = project.mod_version
+group = project.maven_group
+
+base {
+    archivesName = project.archives_base_name
+}
+
+repositories {
+    mavenCentral()
+}
+
+loom {
+    splitEnvironmentSourceSets()
+
+    mods {
+        "toaminimap" {
+            sourceSet sourceSets.main
+            sourceSet sourceSets.client
+        }
+    }
+}
+
+dependencies {
+    minecraft "com.mojang:minecraft:${project.minecraft_version}"
+    implementation "net.fabricmc:fabric-loader:${project.loader_version}"
+    implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
+}
+
+processResources {
+    inputs.property "version", project.version
+    filesMatching("fabric.mod.json") {
+        expand "version": project.version
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    it.options.release = 25
+    it.options.encoding = 'UTF-8'
+}
+
+java {
+    withSourcesJar()
+    sourceCompatibility = JavaVersion.VERSION_25
+    targetCompatibility = JavaVersion.VERSION_25
+}
+
+jar {
+    from("LICENSE") {
+        rename { "${it}_${project.base.archivesName.get()}" }
+    }
+}
+
+// Remove source files left behind by TOA Minimap 1.x when a new release is
+// extracted over an existing project directory. 2.x no longer renders Dynmap PNGs.
+def legacyClientSources = [
+        "DynmapFrameService.java",
+        "DynmapTileCache.java",
+        "MapTexture.java"
+]
+
+tasks.register("cleanupLegacyMinimapSources") {
+    doLast {
+        legacyClientSources.each { name ->
+            def legacy = file("src/client/java/com/theonesabove/minimap/${name}")
+            if (legacy.exists()) {
+                logger.lifecycle("Removing legacy TOA Minimap source: ${legacy}")
+                delete legacy
+            }
+        }
+    }
+}
+
+tasks.named("compileClientJava").configure {
+    dependsOn tasks.named("cleanupLegacyMinimapSources")
+}

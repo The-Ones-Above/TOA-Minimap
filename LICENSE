@@ -1,0 +1,80 @@
+# TOA Minimap Restricted Source License
+
+Copyright © 2026 The Ones Above. All rights reserved.
+
+This license applies to the TOA Minimap project, including its source code, compiled binaries, configuration files, documentation, graphical assets, textures, icons, and other original project materials (collectively, the "Software"), except where a third-party component is separately licensed.
+
+## 1. Ownership
+
+The Software is proprietary software owned by The Ones Above and/or its respective contributors.
+
+Making the source code publicly viewable does **not** place the Software in the public domain and does **not** grant an open-source license.
+
+All rights not expressly granted by this license are reserved.
+
+## 2. Permission to Use Compiled Releases
+
+You may download and use an official compiled release of TOA Minimap for personal, non-commercial gameplay, subject to these terms.
+
+You may not use an official compiled release in a commercial product, paid modpack, paid client, resale package, or other commercial offering without prior written permission from The Ones Above.
+
+## 3. Source Code Access
+
+If source code is made publicly available, it is provided for purposes such as review, learning, security inspection, compatibility work, and contribution to this project.
+
+Public access to the source code does not grant permission to create or distribute your own version of the Software.
+
+## 4. Restrictions
+
+Without prior written permission from The Ones Above, you may not:
+
+1. copy or reproduce substantial portions of the source code for use in another project;
+2. modify, fork, adapt, translate, or create derivative works of the Software for public or private distribution;
+3. redistribute, rehost, mirror, or republish the source code or compiled binaries;
+4. sell, rent, license, sublicense, monetise, or commercially exploit the Software;
+5. include the Software or substantial portions of it in another mod, client, launcher, modpack, plugin, product, or service;
+6. remove or alter copyright notices, attribution notices, license notices, branding, or ownership information;
+7. claim the Software, its code, or its original assets as your own;
+8. use the Software's original graphical assets, icons, textures, branding, or other original media in another project;
+9. distribute a modified build under the name "TOA Minimap", "The Ones Above", or any confusingly similar name;
+10. circumvent technical or licensing restrictions included with the Software.
+
+## 5. Contributions
+
+Unless a separate written agreement states otherwise, submitting a pull request, patch, code contribution, asset, or other contribution to the official TOA Minimap repository grants The Ones Above a perpetual, worldwide, royalty-free, irrevocable license to use, modify, distribute, relicense, and incorporate that contribution into TOA Minimap.
+
+You retain copyright in your original contribution unless ownership is separately assigned in writing.
+
+## 6. Third-Party Software
+
+The Software may depend on or interact with third-party software, libraries, APIs, or Minecraft/Fabric components.
+
+Those third-party components remain subject to their own licenses and are not relicensed under this document.
+
+This license does not grant rights to Minecraft, Mojang Studios, Microsoft, Fabric, or any other third-party trademarks, software, or assets.
+
+## 7. Trademarks and Branding
+
+This license does not grant permission to use the names, logos, trademarks, branding, or identity of The Ones Above except as necessary to identify an official unmodified copy of the Software.
+
+## 8. No Warranty
+
+THE SOFTWARE IS PROVIDED "AS IS" AND "AS AVAILABLE", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, TITLE, AND NON-INFRINGEMENT.
+
+TO THE MAXIMUM EXTENT PERMITTED BY LAW, THE ONES ABOVE AND ITS CONTRIBUTORS SHALL NOT BE LIABLE FOR ANY CLAIM, LOSS, DAMAGE, OR OTHER LIABILITY ARISING FROM OR RELATED TO THE SOFTWARE OR ITS USE.
+
+## 9. Termination
+
+Any permission granted under this license automatically terminates if you breach these terms.
+
+Upon termination, you must stop using and distributing any copies that were used in violation of this license.
+
+## 10. Additional Permission
+
+If you want permission to fork, redistribute, modify, integrate, commercially use, or otherwise use TOA Minimap beyond the permissions above, you must obtain prior written permission from The Ones Above.
+
+## 11. No Open-Source Grant
+
+This is a proprietary source-available license, not an OSI-approved open-source license.
+
+No rights under copyright, patent, trademark, or other intellectual-property law are granted except those expressly stated in this document.
