@@ -28,7 +28,7 @@ public final class ToaMinimapClient implements ClientModInitializer {
         access.register();
         cache = new ClientMapCache(config);
         renderer = new MapViewRenderer(cache);
-        hud = new MinimapHud(config, renderer);
+        hud = new MinimapHud(config, renderer, access);
 
         KeyMapping edit = key("key.toaminimap.edit_layout", GLFW.GLFW_KEY_M);
         KeyMapping world = key("key.toaminimap.open_world_map", GLFW.GLFW_KEY_X);
@@ -39,20 +39,30 @@ public final class ToaMinimapClient implements ClientModInitializer {
             boolean authorized = access.isAuthorized(client);
 
             if (!authorized) {
-                // If authorization is lost while a TOA Minimap screen is open
-                // (disconnect/server switch), close it immediately and stop all
-                // map generation/cache updates.
                 if (client.gui.screen() instanceof WorldMapScreen || client.gui.screen() instanceof MinimapEditScreen) {
                     client.gui.setScreen(null);
                     hud.setEditing(false);
                 }
             } else {
-                cache.tick(client);
+                // Do not spend CPU generating a private map when the player owns neither access item.
+                if (access.hasAnyMapItem()) cache.tick(client);
+
+                if (client.gui.screen() instanceof WorldMapScreen && !access.hasCityMap()) {
+                    client.gui.setScreen(null);
+                }
+                if (client.gui.screen() instanceof MinimapEditScreen && !access.hasCompass()) {
+                    client.gui.setScreen(null);
+                    hud.setEditing(false);
+                }
             }
 
             while (edit.consumeClick()) {
                 if (!authorized) {
                     access.showUnavailableMessage(client);
+                    continue;
+                }
+                if (!access.hasCompass()) {
+                    access.showCompassRequired(client);
                     continue;
                 }
                 if (client.gui.screen() instanceof MinimapEditScreen) {
@@ -69,6 +79,10 @@ public final class ToaMinimapClient implements ClientModInitializer {
                     access.showUnavailableMessage(client);
                     continue;
                 }
+                if (!access.hasCityMap()) {
+                    access.showCityMapRequired(client);
+                    continue;
+                }
                 if (client.gui.screen() instanceof WorldMapScreen) client.gui.setScreen(null);
                 else if (client.gui.screen() == null && client.player != null) {
                     client.gui.setScreen(new WorldMapScreen(config, renderer, world));
@@ -80,6 +94,10 @@ public final class ToaMinimapClient implements ClientModInitializer {
                     access.showUnavailableMessage(client);
                     continue;
                 }
+                if (!access.hasCompass()) {
+                    access.showCompassRequired(client);
+                    continue;
+                }
                 config.enabled = !config.enabled;
                 config.save();
             }
@@ -87,7 +105,10 @@ public final class ToaMinimapClient implements ClientModInitializer {
 
         HudElementRegistry.addLast(
                 Identifier.fromNamespaceAndPath(MOD_ID, "minimap"),
-                (graphics, delta) -> { if (access.isAuthorized(net.minecraft.client.Minecraft.getInstance())) hud.render(graphics); }
+                (graphics, delta) -> {
+                    var mc = net.minecraft.client.Minecraft.getInstance();
+                    if (access.isAuthorized(mc) && access.hasCompass()) hud.render(graphics);
+                }
         );
 
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {

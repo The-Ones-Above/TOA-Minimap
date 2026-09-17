@@ -1,0 +1,58 @@
+name: Build and Release TOA Minimap
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: corretto
+          java-version: "25"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "9.6.0"
+
+      - name: Build TOA Minimap
+        run: gradle clean build --no-daemon --no-watch-fs
+
+      - name: Prepare release JAR
+        shell: bash
+        run: |
+          mkdir -p dist
+
+          JAR="$(find build/libs -maxdepth 1 -type f -name '*.jar' \
+            ! -name '*-sources.jar' \
+            ! -name '*-dev.jar' \
+            ! -name '*-shadow.jar' \
+            | head -n 1)"
+
+          if [ -z "$JAR" ]; then
+            echo "Could not find the built TOA Minimap JAR."
+            exit 1
+          fi
+
+          echo "Using built JAR: $JAR"
+          cp "$JAR" dist/TOA-Minimap.jar
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: TOA Minimap ${{ github.ref_name }}
+          generate_release_notes: true
+          files: |
+            dist/TOA-Minimap.jar

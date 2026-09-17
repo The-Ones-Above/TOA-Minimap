@@ -7,11 +7,16 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ServerData;
 import net.minecraft.network.chat.Component;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.Locale;
+import java.util.UUID;
 
 /**
  * Keeps TOA Minimap disabled unless the client is connected to The Ones Above
  * and the server explicitly authorises the mod through the companion plugin.
+ * Also receives server-authoritative access-item and Citizens NPC state.
  */
 public final class ServerAccessController {
     private static final String ROOT_DOMAIN = "theonesabove.com";
@@ -19,13 +24,17 @@ public final class ServerAccessController {
 
     private volatile boolean hostAllowed;
     private volatile boolean handshakeAuthorized;
+    private volatile boolean hasCompass;
+    private volatile boolean hasCityMap;
     private volatile String connectedHost = "";
+    private volatile List<NpcMarker> npcMarkers = List.of();
     private long nextRequestAt;
 
     public void register() {
-        // Same namespaced channel, but separately registered for each direction.
         PayloadTypeRegistry.clientboundPlay().register(ServerAuthPayload.TYPE, ServerAuthPayload.CODEC);
         PayloadTypeRegistry.serverboundPlay().register(ClientAuthRequestPayload.TYPE, ClientAuthRequestPayload.CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(ItemAccessPayload.TYPE, ItemAccessPayload.CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(NpcMarkersPayload.TYPE, NpcMarkersPayload.CODEC);
 
         ClientPlayNetworking.registerGlobalReceiver(ServerAuthPayload.TYPE, (payload, context) ->
                 context.client().execute(() -> {
@@ -36,6 +45,17 @@ public final class ServerAccessController {
                         handshakeAuthorized = false;
                     }
                 })
+        );
+
+        ClientPlayNetworking.registerGlobalReceiver(ItemAccessPayload.TYPE, (payload, context) ->
+                context.client().execute(() -> {
+                    hasCompass = payload.hasCompass();
+                    hasCityMap = payload.hasCityMap();
+                })
+        );
+
+        ClientPlayNetworking.registerGlobalReceiver(NpcMarkersPayload.TYPE, (payload, context) ->
+                context.client().execute(() -> npcMarkers = parseNpcMarkers(payload.data()))
         );
 
         ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> {
@@ -78,8 +98,10 @@ public final class ServerAccessController {
                 && handshakeAuthorized;
     }
 
-    public boolean isHostAllowed() { return hostAllowed; }
-    public boolean hasHandshake() { return handshakeAuthorized; }
+    public boolean hasCompass() { return hasCompass; }
+    public boolean hasCityMap() { return hasCityMap; }
+    public boolean hasAnyMapItem() { return hasCompass || hasCityMap; }
+    public List<NpcMarker> npcMarkers() { return npcMarkers; }
 
     public void showUnavailableMessage(Minecraft client) {
         if (client == null || client.player == null) return;
@@ -90,11 +112,41 @@ public final class ServerAccessController {
         client.player.sendSystemMessage(Component.literal(message));
     }
 
+    public void showCompassRequired(Minecraft client) {
+        if (client != null && client.player != null) {
+            client.player.sendSystemMessage(Component.literal("You need a Navigator's Compass to use the minimap."));
+        }
+    }
+
+    public void showCityMapRequired(Minecraft client) {
+        if (client != null && client.player != null) {
+            client.player.sendSystemMessage(Component.literal("You need a City Map to open the world map."));
+        }
+    }
+
     private void reset() {
         hostAllowed = false;
         handshakeAuthorized = false;
+        hasCompass = false;
+        hasCityMap = false;
         connectedHost = "";
+        npcMarkers = List.of();
         nextRequestAt = 0L;
+    }
+
+    private static List<NpcMarker> parseNpcMarkers(String raw) {
+        if (raw == null || raw.isBlank()) return List.of();
+        List<NpcMarker> result = new ArrayList<>();
+        String[] rows = raw.split("\\n");
+        for (String row : rows) {
+            if (row == null || row.isBlank()) continue;
+            String[] parts = row.split(",", 3);
+            if (parts.length != 3) continue;
+            try {
+                result.add(new NpcMarker(UUID.fromString(parts[0]), Double.parseDouble(parts[1]), Double.parseDouble(parts[2])));
+            } catch (RuntimeException ignored) {}
+        }
+        return Collections.unmodifiableList(result);
     }
 
     private static boolean isTheOnesAboveHost(String host) {
