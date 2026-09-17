@@ -1,302 +1,128 @@
 # TOA Minimap
 
-**TOA Minimap** is a Fabric client-side minimap and world map built specifically for **The Ones Above** Minecraft server.
+## 2.7.2 — Map tile integrity fix
 
-It provides a clean, lightweight top-down map generated directly from Minecraft world data, with persistent local map caching, smooth world-map navigation, configurable HUD placement, and server-side authorization so the mod only functions on approved The Ones Above servers.
+- Fixed a serious map rendering bug where a chunk from another part of the world could appear at the wrong coordinates.
+- GPU texture identifiers now use the exact chunk X/Z coordinates instead of `Objects.hash(chunkX, chunkZ)`.
+- This prevents texture-ID collisions from causing unrelated terrain tiles to overwrite each other.
+- Map cache bumped to `client-v9` so the map regenerates cleanly after upgrading.
 
-> **Current version:** 2.7.0  
-> **Minecraft:** 26.2  
-> **Loader:** Fabric  
-> **Java:** 25
+TOA Minimap is a Minecraft 26.2 Fabric client minimap and world map built specifically for **The Ones Above**. Terrain is generated from Minecraft's client chunk data and stored in a persistent local cache for a crisp, top-down map without relying on Dynmap imagery.
 
----
+## Server-only access
+
+Version 2.7.1 adds a two-part server restriction. TOA Minimap only activates when both checks pass:
+
+1. The multiplayer address is `theonesabove.com` or a subdomain such as `play.theonesabove.com` or `minecraft.theonesabove.com`.
+2. The server sends the official `toaminimap:auth` handshake through the bundled **TOAMinimapAuth** Paper companion plugin.
+
+If either check fails, TOA Minimap stays dormant: the HUD is hidden, **M** and **X** do not open TOA Minimap screens, and no map chunks are generated or added to the cache.
+
+> This is practical server gating, not unbreakable DRM. Because the client code runs on a player's computer, a deliberately modified client can remove client-side restrictions. The handshake ensures the unmodified official client only activates on a server running the TOA companion plugin.
 
 ## Features
 
-### Minimap
-
-- Crisp top-down terrain rendering generated from Minecraft block data
-- Heading-up minimap: the world rotates as the player turns
-- Persistent local map cache
-- Small player marker with white centre and dark outline
-- Compact coordinate display
-- Adjustable minimap position and size
-- No entity radar
-- No mobs, NPCs, dropped items, or other-player markers
-
-### World Map
-
-Press **X** to open the full World Map.
-
-- Smooth pan and zoom
-- North-up world view
-- Persistent previously explored terrain
-- Mouse-wheel zooming
-- Mouse drag panning
-- Player position indicator
-- Press **X** again or **Esc** to close
-
-### Minimap Editor
-
-Press **M** to enter minimap edit mode.
-
-While editing:
-
-- Drag the minimap to reposition it
-- Scroll over the minimap to resize it
-- Press **Esc** to save and exit
-
----
+- Crisp client-generated top-down terrain at one cached map pixel per Minecraft block.
+- Persistent explored-map cache, so previously mapped areas remain available after chunks unload.
+- Cartographic colour grading, material variation, roof/cliff relief, cleaner vegetation, and directional shading.
+- Heading-up HUD minimap: the player remains centred while the map rotates underneath them.
+- Compact live coordinates below the minimap.
+- Dedicated full-screen World Map with smooth pan and zoom.
+- No entity radar, NPC dots, mob markers, other-player markers, or waypoints.
+- Minimap position and size can be edited in-game.
 
 ## Controls
 
-| Key | Action |
-|---|---|
-| **M** | Edit minimap position and size |
-| **X** | Open / close World Map |
-| **Esc** | Close editor or World Map |
-| **Mouse drag** | Move minimap in edit mode / pan World Map |
-| **Mouse wheel** | Resize minimap in edit mode / zoom World Map |
+- **M** — Edit minimap position and size.
+  - Left-drag the minimap to move it.
+  - Scroll over the minimap to resize it.
+  - Esc saves and closes the editor.
+- **X** — Open/close the World Map.
+  - Left-drag to pan.
+  - Scroll to zoom.
+  - X or Esc closes the World Map.
 
-Key bindings can be changed through Minecraft's normal Controls menu.
+All controls can be rebound in Minecraft's keybind settings.
 
----
+## Client installation
 
-## Server-Locked Access
+The client requires:
 
-TOA Minimap is intentionally restricted to **The Ones Above** servers.
+- Minecraft 26.2
+- Fabric Loader
+- Fabric API
+- Java 25
 
-The mod only enables when both of the following checks succeed:
+Place the built `toa-minimap-2.7.1.jar` in the client's `mods` folder.
 
-1. The player is connected to `theonesabove.com` or an approved subdomain.
-2. The server responds to the TOA Minimap authorization handshake.
+## Server installation
 
-If authorization fails, TOA Minimap disables:
+TOA Minimap 2.7.1 requires the bundled **TOAMinimapAuth** Paper plugin on The Ones Above server.
 
-- minimap rendering
-- World Map access
-- minimap editing
-- map generation
-- local cache updates
-
-Authorization is cleared when the player disconnects or changes server.
-
-### Companion Server Plugin
-
-The server-side authorization plugin is included in:
-
-```text
-server-plugin/
-```
-
-Build it with:
+Build it separately:
 
 ```powershell
 cd server-plugin
 mvn clean package
 ```
 
-The resulting JAR will be located in:
+Then copy:
 
 ```text
-server-plugin/target/
+server-plugin/target/toa-minimap-auth-1.0.1.jar
 ```
 
-Place the built `toa-minimap-auth` JAR in the Paper server's:
+into the Paper server's `plugins` folder and restart the server.
+
+The plugin sends a small one-byte authorization payload on:
 
 ```text
-plugins/
+toaminimap:auth
 ```
 
-directory and restart the server.
+No commands or permissions are required.
 
----
+## Build the Fabric client
 
-## Installation
-
-### Client
-
-Install:
-
-- Minecraft 26.2
-- Fabric Loader
-- Fabric API
-- TOA Minimap
-
-Place the TOA Minimap JAR in:
-
-```text
-.minecraft/mods/
-```
-
-### Server
-
-The server must also have the **TOAMinimapAuth** companion Paper plugin installed for the client mod to activate.
-
----
-
-## Building From Source
-
-### Client Mod
-
-From the project root:
+From the repository root:
 
 ```powershell
 gradle clean build --no-daemon --no-watch-fs
 ```
 
-The compiled JAR will be generated under:
+The client JAR will be created under:
 
 ```text
-build/libs/
+build/libs/toa-minimap-2.7.1.jar
 ```
 
-### Server Plugin
+## Map cache
 
-From:
+Current map tiles are stored under:
 
 ```text
-server-plugin/
+.minecraft/toa-minimap-cache/theonesabove/client-v8/
 ```
 
-run:
+The cache is only updated after the server restriction and handshake have both succeeded.
 
-```powershell
-mvn clean package
-```
+## 2.7.1
 
-The server plugin targets Paper 26.2 and Java 25.
+- Restricted TOA Minimap to The Ones Above infrastructure.
+- Added hostname validation for `theonesabove.com` and its subdomains.
+- Added a mandatory server handshake (`toaminimap:auth`).
+- Added the `TOAMinimapAuth` Paper companion plugin source.
+- Map generation, HUD rendering, World Map and minimap editor remain disabled until authorization succeeds.
+- Authorization is cleared immediately on disconnect/server switch.
 
----
+## 2.6.1
 
-## Map Rendering
-
-TOA Minimap does **not** use Dynmap images.
-
-Terrain is generated directly from Minecraft world/chunk data and converted into a persistent top-down map.
-
-The renderer includes:
-
-- block-aware map colours
-- terrain-height shading
-- directional lighting
-- material variation
-- improved roof and road separation
-- foliage and water styling
-- reduced vegetation noise
-- top-surface sampling
-- persistent client-side map tiles
-
-The goal is a clean, readable map while keeping the visual style close to Minecraft itself.
-
----
-
-## Map Cache
-
-Previously generated map data is saved locally so explored areas remain available after chunks unload.
-
-The current cache format is stored under:
-
-```text
-.minecraft/toa-minimap-cache/
-```
-
-Map cache data may be regenerated between major renderer updates.
-
-If the map ever displays outdated or corrupted terrain, close Minecraft and delete the TOA Minimap cache folder. It will rebuild automatically the next time those areas are loaded.
-
----
-
-## Performance
-
-TOA Minimap prioritizes chunks closest to the player and keeps map generation within a small client-side time budget to avoid affecting normal gameplay.
-
-The renderer:
-
-- prioritizes visible terrain
-- drops stale queued work after movement
-- caches completed map tiles
-- avoids repeatedly rebuilding unchanged terrain
-- keeps World Map rendering separate from map generation
-
----
-
-## Privacy
-
-TOA Minimap does not provide player tracking, entity radar, or hidden-world information.
-
-The client only maps world data that Minecraft itself has provided to the player.
-
-The authorization system exists solely to restrict TOA Minimap functionality to approved The Ones Above servers.
-
----
-
-## Version 2.7.0
-
-### Server Authorization
-
-- Added The Ones Above server restriction
-- Added hostname validation
-- Added server authorization handshake
-- Added companion Paper authorization plugin
-- Minimap remains disabled until authorization succeeds
-- World Map, map generation, cache updates, and editor are disabled on unauthorized servers
-- Authorization resets automatically after disconnecting or switching servers
-
-### Previous Improvements
-
-Recent versions also introduced:
-
-- persistent client-side map caching
-- faster nearby-chunk generation
-- smoother World Map pan and zoom
-- improved surface sampling
-- cartographic terrain shading
-- cleaner material colouring
-- improved player markers
-- editable minimap position and scale
-- dedicated World Map screen
-- removal of Dynmap image rendering
-
----
-
-## Project Structure
-
-```text
-TOA-Minimap/
-├── src/
-│   └── client/
-├── server-plugin/
-│   ├── src/
-│   └── pom.xml
-├── build.gradle
-├── gradle.properties
-├── settings.gradle
-├── README.md
-└── LICENSE.md
-```
-
----
+- X closes the World Map as well as opening it and respects a rebound World Map key.
+- Visible/new map chunks are prioritised ahead of background prefetch work.
+- Moving into a new chunk discards stale queued work from the previous area.
+- Client map generation scans more frequently while keeping a strict generation budget to reduce movement hitching.
+- Improved fill-in when entering a previously unmapped area.
 
 ## License
 
-TOA Minimap is **proprietary source-available software**.
-
-The source code may be publicly visible, but that does **not** grant permission to copy, modify, redistribute, repackage, sell, fork, or use substantial portions of the project in another mod or project without explicit written permission from **The Ones Above**.
-
-See:
-
-```text
-LICENSE.md
-```
-
-for the full license terms.
-
----
-
-## The Ones Above
-
-TOA Minimap is developed for **The Ones Above** Minecraft server.
-
-Minecraft and Mojang are trademarks of Microsoft/Mojang Studios.  
-TOA Minimap is not affiliated with or endorsed by Mojang Studios or Microsoft.
+Copyright © 2026 The Ones Above. All rights reserved. See `LICENSE` for the repository's licensing terms.

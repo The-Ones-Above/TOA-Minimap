@@ -18,7 +18,6 @@ import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Deque;
 import java.util.Set;
 import java.util.concurrent.*;
@@ -52,7 +51,7 @@ public final class ClientMapCache implements AutoCloseable {
         this.cacheRoot = FabricLoader.getInstance().getGameDir()
                 .resolve("toa-minimap-cache")
                 .resolve("theonesabove")
-                .resolve("client-v8");
+                .resolve("client-v9");
         indexDiskCacheAsync();
     }
 
@@ -328,9 +327,13 @@ public final class ClientMapCache implements AutoCloseable {
                 }
             }
 
+            // IMPORTANT: use the exact chunk coordinates in the texture ID.
+            // Objects.hash(x, z) is not unique (for example, neighbouring
+            // coordinate pairs can collide), which allowed an unrelated map
+            // chunk to overwrite this texture in Minecraft's texture manager.
             Identifier id = Identifier.fromNamespaceAndPath(
                     ToaMinimapClient.MOD_ID,
-                    "client_map/" + Integer.toUnsignedString(Objects.hash(key.x, key.z), 36)
+                    "client_map/x_" + key.x + "_z_" + key.z
             );
             DynamicTexture texture = new DynamicTexture(() -> "TOA Minimap client map chunk", nativeImage);
             Minecraft.getInstance().getTextureManager().register(id, texture);

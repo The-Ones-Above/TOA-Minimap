@@ -35,6 +35,7 @@ public final class ToaMinimapClient implements ClientModInitializer {
         KeyMapping toggle = key("key.toaminimap.toggle_minimap", GLFW.GLFW_KEY_UNKNOWN);
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
+            access.tick(client);
             boolean authorized = access.isAuthorized(client);
 
             if (!authorized) {
