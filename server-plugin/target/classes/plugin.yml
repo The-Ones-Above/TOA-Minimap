@@ -1,6 +1,16 @@
 name: TOAMinimapAuth
-version: 1.0.1
+version: 1.1.0
 main: com.theonesabove.toaminimapauth.TOAMinimapAuthPlugin
 api-version: '26.2'
 authors: [The Ones Above]
-description: Authorises the TOA Minimap client mod on The Ones Above server.
+description: Server companion for TOA Minimap authorization, access items and Citizens minimap markers.
+softdepend: [Citizens, TOAShops]
+commands:
+  toaminimap:
+    description: Admin commands for TOA Minimap access items.
+    usage: /toaminimap give <compass|map|both> [player]
+    permission: toaminimap.admin
+permissions:
+  toaminimap.admin:
+    description: Allows giving TOA Minimap access items.
+    default: op
