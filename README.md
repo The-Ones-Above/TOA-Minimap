@@ -4,13 +4,43 @@
 
 It renders a persistent top-down map directly from Minecraft chunk data, provides a heading-up HUD minimap and full World Map, and uses a Paper companion plugin for server authorization, Citizens NPC markers, and item-based access.
 
-> **Client version:** 2.8.0  
+> **Client version:** 2.8.4  
 > **Server companion:** 1.1.0  
 > **Minecraft:** 26.2  
 > **Loader:** Fabric  
 > **Java:** 25
 
 ---
+
+
+## 2.8.4
+
+- Citizens / TOAShops NPC markers are now tiny solid yellow dots instead of cross-shaped markers.
+- Marker smoothing from 2.8.3 is unchanged.
+
+## 2.8.3
+
+- Reworked minimap entity markers around a frame-rate-independent smoothing pipeline.
+- Citizens/TOAShops NPC markers now ignore tiny positional jitter and remain stable while stationary.
+- Other-player markers interpolate smoothly between client entity updates.
+- Marker positions remain floating-point until the final GUI transform, removing whole-pixel stepping.
+- NPC and other-player dots remain clean solid markers with no outline.
+- Only the local-player marker keeps the dark outline.
+- Large teleports snap immediately instead of slowly sliding across the minimap.
+
+## 2.8.2
+
+- Fixed the update popup URL opener for Minecraft 26.2 mappings by using the standard Java desktop browser API.
+
+## 2.8.1
+
+- Added an automatic GitHub update check against the official latest release.
+- When the installed client is outdated, an in-game notice appears once per session.
+- Press **Enter** on the notice to open the permanent latest-version download link; **Esc** continues normally.
+- Citizens NPC minimap positions are stabilised server-side to remove idle dot jitter.
+- NPC dots are clean yellow dots with no dark outline.
+- Other-player dots are clean white dots with no dark outline.
+- Only the local player marker keeps the black contrast outline.
 
 ## Features
 
@@ -132,7 +162,7 @@ Install:
 - Minecraft 26.2
 - Fabric Loader
 - Fabric API
-- TOA Minimap 2.8.0
+- TOA Minimap 2.8.4
 
 Place the client JAR in:
 
@@ -191,7 +221,7 @@ If map data ever becomes outdated or corrupted, close Minecraft and delete the T
 
 ---
 
-## 2.8.0
+## 2.8.1
 
 - Added Navigator's Compass requirement for the HUD minimap
 - Added City Map requirement for the full World Map

@@ -42,9 +42,11 @@ public final class TOAMinimapAuthPlugin extends JavaPlugin implements PluginMess
 
     private static final double NPC_RADIUS = 256.0;
     private static final int MAX_NPCS_PER_PLAYER = 128;
+    private static final double NPC_STABILIZE_DISTANCE_SQ = 0.15 * 0.15;
 
     private final Set<UUID> authorizedPlayers = new HashSet<>();
     private final Map<UUID, AccessState> lastAccessState = new HashMap<>();
+    private final Map<UUID, StableNpcPosition> stableNpcPositions = new HashMap<>();
     private NamespacedKey itemTypeKey;
 
     @Override
@@ -74,6 +76,7 @@ public final class TOAMinimapAuthPlugin extends JavaPlugin implements PluginMess
         getServer().getMessenger().unregisterOutgoingPluginChannel(this, NPC_CHANNEL);
         authorizedPlayers.clear();
         lastAccessState.clear();
+        stableNpcPositions.clear();
     }
 
     @Override
@@ -139,6 +142,10 @@ public final class TOAMinimapAuthPlugin extends JavaPlugin implements PluginMess
 
     private void broadcastNpcSnapshots() {
         List<Entity> citizens = citizensEntities();
+        Set<UUID> liveNpcIds = new HashSet<>();
+        for (Entity entity : citizens) liveNpcIds.add(entity.getUniqueId());
+        stableNpcPositions.keySet().removeIf(id -> !liveNpcIds.contains(id));
+
         for (Player player : Bukkit.getOnlinePlayers()) {
             if (!authorizedPlayers.contains(player.getUniqueId())) continue;
             sendNpcSnapshot(player, citizens);
@@ -153,13 +160,14 @@ public final class TOAMinimapAuthPlugin extends JavaPlugin implements PluginMess
 
         for (Entity entity : citizens) {
             if (entity == null || !entity.isValid() || entity.getWorld() != player.getWorld()) continue;
-            Location loc = entity.getLocation();
-            if (loc.distanceSquared(origin) > radiusSq) continue;
+            Location raw = entity.getLocation();
+            if (raw.distanceSquared(origin) > radiusSq) continue;
+            StableNpcPosition stable = stabilizeNpc(entity, raw);
 
             if (count++ >= MAX_NPCS_PER_PLAYER) break;
             out.append(entity.getUniqueId())
-                    .append(',').append(trimDouble(loc.getX()))
-                    .append(',').append(trimDouble(loc.getZ()))
+                    .append(',').append(trimDouble(stable.x()))
+                    .append(',').append(trimDouble(stable.z()))
                     .append('\n');
         }
 
@@ -168,6 +176,25 @@ public final class TOAMinimapAuthPlugin extends JavaPlugin implements PluginMess
         } catch (Throwable ex) {
             getLogger().warning("Could not send Citizens markers to " + player.getName() + ": " + ex.getMessage());
         }
+    }
+
+
+    /**
+     * Citizens entities can report tiny coordinate changes even when an NPC is visually stationary.
+     * Keep its minimap position fixed until it has actually moved a meaningful distance.
+     */
+    private StableNpcPosition stabilizeNpc(Entity entity, Location raw) {
+        UUID id = entity.getUniqueId();
+        UUID worldId = raw.getWorld().getUID();
+        StableNpcPosition previous = stableNpcPositions.get(id);
+        if (previous != null && previous.worldId().equals(worldId)) {
+            double dx = raw.getX() - previous.x();
+            double dz = raw.getZ() - previous.z();
+            if (dx * dx + dz * dz < NPC_STABILIZE_DISTANCE_SQ) return previous;
+        }
+        StableNpcPosition next = new StableNpcPosition(worldId, raw.getX(), raw.getZ());
+        stableNpcPositions.put(id, next);
+        return next;
     }
 
     /** Citizens is optional and accessed reflectively so this plugin has no hard dependency. */
@@ -275,4 +302,5 @@ public final class TOAMinimapAuthPlugin extends JavaPlugin implements PluginMess
     }
 
     private record AccessState(boolean hasCompass, boolean hasCityMap) {}
+    private record StableNpcPosition(UUID worldId, double x, double z) {}
 }

@@ -20,12 +20,15 @@ public final class ToaMinimapClient implements ClientModInitializer {
     private MapViewRenderer renderer;
     private ClientMapCache cache;
     private ServerAccessController access;
+    private UpdateChecker updateChecker;
 
     @Override
     public void onInitializeClient() {
         config = MinimapConfig.load();
         access = new ServerAccessController();
         access.register();
+        updateChecker = new UpdateChecker();
+        updateChecker.start();
         cache = new ClientMapCache(config);
         renderer = new MapViewRenderer(cache);
         hud = new MinimapHud(config, renderer, access);
@@ -36,6 +39,7 @@ public final class ToaMinimapClient implements ClientModInitializer {
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             access.tick(client);
+            updateChecker.tick(client);
             boolean authorized = access.isAuthorized(client);
 
             if (!authorized) {

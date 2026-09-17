@@ -3,9 +3,6 @@ package com.theonesabove.minimap;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 
-import java.util.HashSet;
-import java.util.Set;
-import java.util.UUID;
 
 public final class MinimapHud {
     private static final int OTHER_PLAYER_COLOR = 0xFFFFFFFF;
@@ -14,6 +11,7 @@ public final class MinimapHud {
     private final MinimapConfig config;
     private final MapViewRenderer renderer;
     private final ServerAccessController access;
+    private final MarkerTracker markerTracker = new MarkerTracker();
     private boolean editing;
     private Bounds lastBounds = new Bounds(0,0,0,0);
 
@@ -73,26 +71,24 @@ public final class MinimapHud {
                                    int left, int top, int size, double rotationDegrees) {
         int cx = left + size / 2;
         int cy = top + size / 2;
-        Set<UUID> npcIds = new HashSet<>();
+        MarkerTracker.Frame frame = markerTracker.update(mc, access);
 
-        for (NpcMarker npc : access.npcMarkers()) {
-            npcIds.add(npc.uuid());
+        // Citizens / TOAShops NPCs: solid yellow, no outline.
+        for (MarkerTracker.SmoothMarker npc : frame.npcs().values()) {
             drawWorldDot(g, mc, left, top, size, cx, cy,
-                    npc.x(), npc.z(), rotationDegrees, NPC_COLOR);
+                    npc.x(), npc.z(), rotationDegrees, NPC_COLOR, true);
         }
 
-        // Real remote players are rendered from live client entities for smooth movement.
-        // Citizens player NPC UUIDs supplied by the server are excluded from this white-dot pass.
-        for (var player : mc.level.players()) {
-            if (player == mc.player || npcIds.contains(player.getUUID())) continue;
+        // Other real players: solid white, no outline.
+        for (MarkerTracker.SmoothMarker player : frame.players().values()) {
             drawWorldDot(g, mc, left, top, size, cx, cy,
-                    player.getX(), player.getZ(), rotationDegrees, OTHER_PLAYER_COLOR);
+                    player.x(), player.z(), rotationDegrees, OTHER_PLAYER_COLOR, false);
         }
     }
 
     private void drawWorldDot(GuiGraphicsExtractor g, Minecraft mc,
                               int left, int top, int size, int cx, int cy,
-                              double worldX, double worldZ, double rotationDegrees, int color) {
+                              double worldX, double worldZ, double rotationDegrees, int color, boolean npc) {
         double dx = worldX - mc.player.getX();
         double dz = worldZ - mc.player.getZ();
         double radians = Math.toRadians(rotationDegrees);
@@ -101,13 +97,23 @@ public final class MinimapHud {
         double rx = dx * cos - dz * sin;
         double rz = dx * sin + dz * cos;
 
-        int x = (int)Math.round(cx + rx / config.minimapBlocksPerPixel);
-        int y = (int)Math.round(cy + rz / config.minimapBlocksPerPixel);
+        // Keep screen coordinates as floating point so markers can move by fractions of a GUI pixel.
+        double x = cx + rx / config.minimapBlocksPerPixel;
+        double y = cy + rz / config.minimapBlocksPerPixel;
 
-        // Keep dots entirely inside the minimap and never leak into the border/coordinates.
-        if (x < left + 2 || x >= left + size - 2 || y < top + 2 || y >= top + size - 2) return;
-        g.fill(x - 1, y - 1, x + 2, y + 2, 0xD9000000);
-        g.fill(x, y, x + 1, y + 1, color);
+        if (x < left + 2.0 || x >= left + size - 2.0 || y < top + 2.0 || y >= top + size - 2.0) return;
+
+        // Keep NPCs as a very small, clean solid dot. At this HUD scale a 2x2
+        // solid marker reads as a circular point without the cross-shaped artifact.
+        // Other players remain slightly larger, but still have no outline.
+        g.pose().pushMatrix();
+        g.pose().translate((float)x, (float)y);
+        if (npc) {
+            g.fill(-1, -1, 1, 1, color);
+        } else {
+            g.fill(-1, -1, 2, 2, color);
+        }
+        g.pose().popMatrix();
     }
 
     private static double normalize(double d) { d %= 360.0; return d < 0 ? d + 360.0 : d; }

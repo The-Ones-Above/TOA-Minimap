@@ -1,5 +1,5 @@
 name: TOAMinimapAuth
-version: 1.1.0
+version: 1.1.1
 main: com.theonesabove.toaminimapauth.TOAMinimapAuthPlugin
 api-version: '26.2'
 authors: [The Ones Above]
