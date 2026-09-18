@@ -68,6 +68,57 @@ public final class MapViewRenderer {
         graphics.disableScissor();
     }
 
+
+    /**
+     * High-performance World Map path. Uses 256x256 block region atlases rather
+     * than one texture draw per Minecraft chunk.
+     */
+    public void drawWorldMap(GuiGraphicsExtractor graphics, Minecraft mc,
+                             int left, int top, int width, int height,
+                             double centerBlockX, double centerBlockZ,
+                             double blocksPerPixel) {
+        if (mc.level == null || blocksPerPixel <= 0.0) return;
+
+        int cx = left + width / 2;
+        int cy = top + height / 2;
+        double halfBlocksX = width * blocksPerPixel * 0.5 + ClientMapCache.REGION_BLOCKS;
+        double halfBlocksZ = height * blocksPerPixel * 0.5 + ClientMapCache.REGION_BLOCKS;
+
+        int minRegionX = floorDiv(centerBlockX - halfBlocksX, ClientMapCache.REGION_BLOCKS);
+        int maxRegionX = floorDiv(centerBlockX + halfBlocksX, ClientMapCache.REGION_BLOCKS);
+        int minRegionZ = floorDiv(centerBlockZ - halfBlocksZ, ClientMapCache.REGION_BLOCKS);
+        int maxRegionZ = floorDiv(centerBlockZ + halfBlocksZ, ClientMapCache.REGION_BLOCKS);
+
+        graphics.enableScissor(left, top, left + width, top + height);
+        graphics.pose().pushMatrix();
+        graphics.pose().translate(cx, cy);
+        float scale = (float)(1.0 / blocksPerPixel);
+        graphics.pose().scale(scale, scale);
+        graphics.pose().translate((float)-centerBlockX, (float)-centerBlockZ);
+
+        for (ClientMapCache.RegionCoord coord : cache.knownRegions()) {
+            if (coord.x() < minRegionX || coord.x() > maxRegionX
+                    || coord.z() < minRegionZ || coord.z() > maxRegionZ) continue;
+
+            ClientMapCache.RegionTexture texture = cache.regionTexture(mc, coord.x(), coord.z());
+            if (texture == null) continue;
+
+            int worldX = coord.x() * ClientMapCache.REGION_BLOCKS;
+            int worldZ = coord.z() * ClientMapCache.REGION_BLOCKS;
+            graphics.blit(
+                    RenderPipelines.GUI_TEXTURED,
+                    texture.id(),
+                    worldX, worldZ,
+                    0, 0,
+                    ClientMapCache.REGION_BLOCKS, ClientMapCache.REGION_BLOCKS,
+                    texture.width(), texture.height()
+            );
+        }
+
+        graphics.pose().popMatrix();
+        graphics.disableScissor();
+    }
+
     private void drawChunk(GuiGraphicsExtractor graphics, Minecraft mc, int chunkX, int chunkZ) {
         ClientMapCache.TileTexture texture = cache.texture(mc, chunkX, chunkZ);
         if (texture == null) return;

@@ -89,7 +89,7 @@ public final class ToaMinimapClient implements ClientModInitializer {
                 }
                 if (client.gui.screen() instanceof WorldMapScreen) client.gui.setScreen(null);
                 else if (client.gui.screen() == null && client.player != null) {
-                    client.gui.setScreen(new WorldMapScreen(config, renderer, world));
+                    client.gui.setScreen(new WorldMapScreen(config, renderer, cache, access, world));
                 }
             }
 

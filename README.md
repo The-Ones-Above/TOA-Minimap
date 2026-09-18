@@ -4,7 +4,7 @@
 
 It renders a persistent top-down map directly from Minecraft chunk data, provides a heading-up HUD minimap and full World Map, and uses a Paper companion plugin for server authorization, Citizens NPC markers, and item-based access.
 
-> **Client version:** 2.8.4  
+> **Client version:** 2.10.3  
 > **Server companion:** 1.1.0  
 > **Minecraft:** 26.2  
 > **Loader:** Fabric  
@@ -13,7 +13,7 @@ It renders a persistent top-down map directly from Minecraft chunk data, provide
 ---
 
 
-## 2.8.4
+## 2.10.0
 
 - Citizens / TOAShops NPC markers are now tiny solid yellow dots instead of cross-shaped markers.
 - Marker smoothing from 2.8.3 is unchanged.
@@ -162,7 +162,7 @@ Install:
 - Minecraft 26.2
 - Fabric Loader
 - Fabric API
-- TOA Minimap 2.8.4
+- TOA Minimap 2.10.0
 
 Place the client JAR in:
 
@@ -243,3 +243,68 @@ TOA Minimap is proprietary source-available software. Public source visibility d
 See `LICENSE` for the full terms.
 
 Minecraft and Mojang are trademarks of Microsoft/Mojang Studios. TOA Minimap is not affiliated with or endorsed by Mojang Studios or Microsoft.
+
+
+## World Map zones and discovered territory
+
+TOAZones regions are shown on the **full World Map only**. They are intentionally not drawn on the HUD minimap.
+
+The client applies a strict discovery mask:
+
+- A zone is rendered only over map chunks already stored in that player's local TOA Minimap cache.
+- Undiscovered chunks do not reveal zone fill, borders, names or the zone's full extent.
+- Zone names appear only after the player has discovered the chunk containing the zone centre.
+- Safe/spawn-style areas are green.
+- Property/plot-style areas are blue.
+- Faction/territory/claim-style areas are red.
+- Other TOAZones regions such as city/harbour/custom regions use gold.
+
+This means the World Map can show City, Spawn and any faction property/territory represented by TOAZones without revealing places the player has never explored.
+
+
+
+## 2.10.0 World Map performance, factions and minimap compass
+
+- Full World Map now uses large 256×256-block GPU region atlases instead of one draw call per 16×16 chunk.
+- Fast panning and zooming no longer has to submit hundreds or thousands of individual chunk textures.
+- Region textures are built asynchronously and cached after first use.
+- TOAFactions HQ land, territories, properties and turfs can now be shown on the World Map.
+- All faction-related areas share the same map colour.
+- Faction names are not permanently printed over properties/territories.
+- Hover a discovered faction area to see which faction owns it.
+- Turfs may display their own turf name and also expose ownership on hover.
+- Faction overlays obey the same discovered-map mask as TOAZones overlays.
+- Added a tiny N/E/S/W edge compass to the HUD minimap.
+- Compass positions are derived directly from local player yaw every render frame for immediate response.
+
+
+
+## 2.10.1 visual cleanup
+
+- Removed permanent black background boxes from TOAZones labels.
+- Removed permanent black background boxes from turf labels.
+- Zone and turf names now use clean floating text with a subtle shadow.
+- Citizens / TOAShops NPC markers now use a small antialiased circular yellow texture.
+- NPC markers have a thin black outline while retaining the existing smooth marker tracking.
+- Other-player markers remain plain white without an outline.
+- The local-player marker remains white with its existing dark outline.
+
+
+## 2.10.2 marker and faction colour update
+
+- Citizens / TOAShops NPC markers are square again.
+- NPC marker uses a yellow 2×2 centre with a one-pixel black border around it.
+- Removed the rounded NPC marker texture.
+- Faction HQs, territories, properties and owned turfs now use the owning faction's configured TOAFactions colour.
+- All areas owned by the same faction therefore share the same map colour.
+- Unclaimed turfs use a neutral grey.
+- Faction ownership is still revealed on hover rather than permanently printing faction names over properties/territories.
+
+
+## 2.10.3 marker and ownership tooltip polish
+
+- NPC and remote-player minimap markers now use the same compact square size.
+- Both marker types now have a thin black outline.
+- NPC centre remains yellow.
+- Remote-player centre remains white.
+- Faction hover tooltips keep “Owned by” neutral but render the faction name itself using that faction's configured TOAFactions colour.

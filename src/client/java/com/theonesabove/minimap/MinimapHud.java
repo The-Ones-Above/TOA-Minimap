@@ -49,6 +49,7 @@ public final class MinimapHud {
                 rotation);
 
         drawEntityMarkers(g, mc, left, top, size, rotation);
+        drawCompass(g, mc, left, top, size, heading);
 
         int cx = left + size/2, cy = top + size/2;
         // Local player marker: white centre with a thin black outline.
@@ -103,17 +104,55 @@ public final class MinimapHud {
 
         if (x < left + 2.0 || x >= left + size - 2.0 || y < top + 2.0 || y >= top + size - 2.0) return;
 
-        // Keep NPCs as a very small, clean solid dot. At this HUD scale a 2x2
-        // solid marker reads as a circular point without the cross-shaped artifact.
-        // Other players remain slightly larger, but still have no outline.
         g.pose().pushMatrix();
         g.pose().translate((float)x, (float)y);
-        if (npc) {
-            g.fill(-1, -1, 1, 1, color);
-        } else {
-            g.fill(-1, -1, 2, 2, color);
-        }
+
+        // NPCs and other players deliberately use the same compact marker size.
+        // Black outer square = thin outline, inner square = marker colour.
+        // NPCs are yellow; real players are white.
+        g.fill(-1, -1, 2, 2, 0xFF000000);
+        g.fill(0, 0, 1, 1, color);
+
         g.pose().popMatrix();
+    }
+
+
+    /**
+     * Xaero-style lightweight edge compass. It is calculated directly from the
+     * local player's current yaw every render frame, so there is no network
+     * update interval or smoothing delay.
+     */
+    private void drawCompass(GuiGraphicsExtractor g, Minecraft mc,
+                             int left, int top, int size, double headingDegrees) {
+        int cx = left + size / 2;
+        int cy = top + size / 2;
+        double inset = Math.max(4.0, size * 0.055);
+        double half = size * 0.5 - inset;
+
+        String[] labels = {"N", "E", "S", "W"};
+        double[] bearings = {0.0, 90.0, 180.0, 270.0};
+
+        for (int i = 0; i < labels.length; i++) {
+            double relative = Math.toRadians(bearings[i] - headingDegrees);
+            double vx = Math.sin(relative);
+            double vy = -Math.cos(relative);
+            double denom = Math.max(Math.abs(vx), Math.abs(vy));
+            if (denom < 0.0001) continue;
+
+            double t = half / denom;
+            double x = cx + vx * t;
+            double y = cy + vy * t;
+
+            String label = labels[i];
+            float scale = 0.44f;
+            int w = mc.font.width(label);
+
+            g.pose().pushMatrix();
+            g.pose().translate((float)x, (float)y);
+            g.pose().scale(scale, scale);
+            g.text(mc.font, label, -w / 2, -4, 0xFFE8E8E8, true);
+            g.pose().popMatrix();
+        }
     }
 
     private static double normalize(double d) { d %= 360.0; return d < 0 ? d + 360.0 : d; }

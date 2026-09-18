@@ -25,6 +25,8 @@ import java.util.concurrent.*;
 /** Persistent client-generated map cache. One cached pixel equals one world block. */
 public final class ClientMapCache implements AutoCloseable {
     public static final int TILE_BLOCKS = 16;
+    public static final int REGION_CHUNKS = 16;
+    public static final int REGION_BLOCKS = TILE_BLOCKS * REGION_CHUNKS;
     private static final int CACHE_MAGIC = 0x544F4135;
     private static final int SCAN_INTERVAL_TICKS = 2;
     private static final int MAX_GENERATE_PER_TICK = 5;
@@ -35,6 +37,8 @@ public final class ClientMapCache implements AutoCloseable {
     private final Deque<ChunkKey> generateQueue = new ConcurrentLinkedDeque<>();
     private final Set<ChunkKey> queued = ConcurrentHashMap.newKeySet();
     private final Set<ChunkCoord> knownChunks = ConcurrentHashMap.newKeySet();
+    private final Set<RegionCoord> knownRegions = ConcurrentHashMap.newKeySet();
+    private final Map<RegionKey, RegionEntry> regionEntries = new ConcurrentHashMap<>();
     private final ExecutorService io = Executors.newFixedThreadPool(4, r -> {
         Thread t = new Thread(r, "TOA-Minimap-MapIO");
         t.setDaemon(true);
@@ -122,6 +126,7 @@ public final class ClientMapCache implements AutoCloseable {
         if (entry.readyPixels != null) {
             int[] pixels = entry.readyPixels;
             entry.readyPixels = null;
+            entry.pixels = pixels;
             upload(key, entry, pixels);
             if (entry.textureId != null) return new TileTexture(entry.textureId, TILE_BLOCKS, TILE_BLOCKS);
         }
@@ -134,7 +139,8 @@ public final class ClientMapCache implements AutoCloseable {
                 CompletableFuture.runAsync(() -> {
                     try {
                         entry.readyPixels = readPixels(path);
-                        if (entry.readyPixels != null) knownChunks.add(new ChunkCoord(key.x, key.z));
+                        entry.pixels = entry.readyPixels;
+                        if (entry.readyPixels != null) registerKnownChunk(key.x, key.z);
                     } catch (Exception ignored) {
                     } finally {
                         entry.loadingDisk = false;
@@ -154,6 +160,139 @@ public final class ClientMapCache implements AutoCloseable {
 
     public Set<ChunkCoord> knownChunks() {
         return knownChunks;
+    }
+
+    public Set<RegionCoord> knownRegions() {
+        return knownRegions;
+    }
+
+    /** True only after this client has actually generated or loaded this map chunk. */
+    public boolean isKnownChunk(int chunkX, int chunkZ) {
+        return knownChunks.contains(new ChunkCoord(chunkX, chunkZ));
+    }
+
+
+    /**
+     * World Map atlas: 16x16 map chunks are combined into one 256x256 GPU texture.
+     * This reduces a large zoomed-out map from hundreds/thousands of draw calls to
+     * a small number of region draw calls.
+     */
+    public RegionTexture regionTexture(Minecraft mc, int regionX, int regionZ) {
+        RegionKey key = new RegionKey(regionX, regionZ);
+        RegionEntry region = regionEntries.computeIfAbsent(key, ignored -> new RegionEntry());
+        region.lastAccess = System.currentTimeMillis();
+
+        if (region.readyPixels != null) {
+            int[] pixels = region.readyPixels;
+            region.readyPixels = null;
+            uploadRegion(key, region, pixels);
+            region.dirty = false;
+        }
+
+        if ((region.textureId == null || region.dirty) && !region.loading) {
+            region.loading = true;
+            CompletableFuture.runAsync(() -> buildRegionPixels(key, region), io);
+        }
+
+        if (region.textureId == null) return null;
+        return new RegionTexture(region.textureId, REGION_BLOCKS, REGION_BLOCKS);
+    }
+
+    private void buildRegionPixels(RegionKey key, RegionEntry region) {
+        try {
+            int[] regionPixels = new int[REGION_BLOCKS * REGION_BLOCKS];
+            boolean any = false;
+
+            int baseChunkX = key.x * REGION_CHUNKS;
+            int baseChunkZ = key.z * REGION_CHUNKS;
+
+            for (int localChunkZ = 0; localChunkZ < REGION_CHUNKS; localChunkZ++) {
+                for (int localChunkX = 0; localChunkX < REGION_CHUNKS; localChunkX++) {
+                    int chunkX = baseChunkX + localChunkX;
+                    int chunkZ = baseChunkZ + localChunkZ;
+                    if (!knownChunks.contains(new ChunkCoord(chunkX, chunkZ))) continue;
+
+                    ChunkKey chunkKey = new ChunkKey(chunkX, chunkZ);
+                    Entry entry = entries.computeIfAbsent(chunkKey, ignored -> new Entry());
+                    int[] pixels = entry.pixels;
+
+                    if (pixels == null) {
+                        Path path = fileFor(chunkKey);
+                        if (Files.isRegularFile(path)) {
+                            try {
+                                pixels = readPixels(path);
+                                entry.pixels = pixels;
+                            } catch (Exception ignored) {
+                            }
+                        }
+                    }
+
+                    if (pixels == null) continue;
+                    any = true;
+
+                    int destX = localChunkX * TILE_BLOCKS;
+                    int destY = localChunkZ * TILE_BLOCKS;
+                    for (int y = 0; y < TILE_BLOCKS; y++) {
+                        System.arraycopy(
+                                pixels, y * TILE_BLOCKS,
+                                regionPixels, (destY + y) * REGION_BLOCKS + destX,
+                                TILE_BLOCKS
+                        );
+                    }
+                }
+            }
+
+            if (any) region.readyPixels = regionPixels;
+        } finally {
+            region.loading = false;
+        }
+    }
+
+    private void uploadRegion(RegionKey key, RegionEntry region, int[] pixels) {
+        try {
+            NativeImage nativeImage = new NativeImage(REGION_BLOCKS, REGION_BLOCKS, false);
+            for (int y = 0; y < REGION_BLOCKS; y++) {
+                int row = y * REGION_BLOCKS;
+                for (int x = 0; x < REGION_BLOCKS; x++) {
+                    nativeImage.setPixel(x, y, pixels[row + x]);
+                }
+            }
+
+            Identifier id = Identifier.fromNamespaceAndPath(
+                    ToaMinimapClient.MOD_ID,
+                    "world_region/x_" + key.x + "_z_" + key.z
+            );
+
+            if (region.textureId != null) {
+                try { Minecraft.getInstance().getTextureManager().release(region.textureId); }
+                catch (Exception ignored) {}
+            }
+
+            DynamicTexture texture = new DynamicTexture(() -> "TOA Minimap world map region", nativeImage);
+            Minecraft.getInstance().getTextureManager().register(id, texture);
+            texture.upload();
+            region.texture = texture;
+            region.textureId = id;
+        } catch (Exception ex) {
+            System.err.println("[TOA Minimap] Failed to upload world region " + key + ": " + ex.getMessage());
+        }
+    }
+
+    private void registerKnownChunk(int chunkX, int chunkZ) {
+        knownChunks.add(new ChunkCoord(chunkX, chunkZ));
+        knownRegions.add(new RegionCoord(
+                Math.floorDiv(chunkX, REGION_CHUNKS),
+                Math.floorDiv(chunkZ, REGION_CHUNKS)
+        ));
+    }
+
+    private void markRegionDirty(int chunkX, int chunkZ) {
+        RegionKey key = new RegionKey(
+                Math.floorDiv(chunkX, REGION_CHUNKS),
+                Math.floorDiv(chunkZ, REGION_CHUNKS)
+        );
+        RegionEntry region = regionEntries.get(key);
+        if (region != null) region.dirty = true;
     }
 
     private void queueGenerate(ChunkKey key, boolean priority) {
@@ -243,7 +382,9 @@ public final class ClientMapCache implements AutoCloseable {
         Entry entry = entries.computeIfAbsent(key, k -> new Entry());
         entry.generatedAt = System.currentTimeMillis();
         entry.readyPixels = pixels;
-        knownChunks.add(new ChunkCoord(key.x, key.z));
+        entry.pixels = pixels;
+        registerKnownChunk(key.x, key.z);
+        markRegionDirty(key.x, key.z);
         writeAsync(key, pixels);
     }
 
@@ -284,7 +425,7 @@ public final class ClientMapCache implements AutoCloseable {
                         try {
                             int x = Integer.parseInt(stem.substring(0, split));
                             int z = Integer.parseInt(stem.substring(split + 1));
-                            knownChunks.add(new ChunkCoord(x, z));
+                            registerKnownChunk(x, z);
                         } catch (NumberFormatException ignored) {}
                     }
                 }
@@ -353,21 +494,41 @@ public final class ClientMapCache implements AutoCloseable {
                 catch (Exception ignored) { if (e.texture != null) e.texture.close(); }
             }
         }
+        for (RegionEntry region : regionEntries.values()) {
+            if (region.textureId != null) {
+                try { Minecraft.getInstance().getTextureManager().release(region.textureId); }
+                catch (Exception ignored) { if (region.texture != null) region.texture.close(); }
+            }
+        }
+        regionEntries.clear();
         entries.clear();
         io.shutdownNow();
     }
 
     public record TileTexture(Identifier id, int width, int height) {}
+    public record RegionTexture(Identifier id, int width, int height) {}
     public record ChunkCoord(int x, int z) {}
+    public record RegionCoord(int x, int z) {}
     private record ChunkKey(int x, int z) {}
+    private record RegionKey(int x, int z) {}
 
     private static final class Entry {
         volatile int[] readyPixels;
+        volatile int[] pixels;
         volatile Identifier textureId;
         volatile DynamicTexture texture;
         volatile boolean diskChecked;
         volatile boolean loadingDisk;
         volatile long generatedAt;
+        volatile long lastAccess;
+    }
+
+    private static final class RegionEntry {
+        volatile int[] readyPixels;
+        volatile Identifier textureId;
+        volatile DynamicTexture texture;
+        volatile boolean loading;
+        volatile boolean dirty;
         volatile long lastAccess;
     }
 }

@@ -12,6 +12,8 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 
 /**
  * Keeps TOA Minimap disabled unless the client is connected to The Ones Above
@@ -28,6 +30,8 @@ public final class ServerAccessController {
     private volatile boolean hasCityMap;
     private volatile String connectedHost = "";
     private volatile List<NpcMarker> npcMarkers = List.of();
+    private volatile List<ZoneMarker> zoneMarkers = List.of();
+    private volatile List<FactionAreaMarker> factionAreas = List.of();
     private long nextRequestAt;
 
     public void register() {
@@ -35,6 +39,8 @@ public final class ServerAccessController {
         PayloadTypeRegistry.serverboundPlay().register(ClientAuthRequestPayload.TYPE, ClientAuthRequestPayload.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(ItemAccessPayload.TYPE, ItemAccessPayload.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(NpcMarkersPayload.TYPE, NpcMarkersPayload.CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(ZoneMarkersPayload.TYPE, ZoneMarkersPayload.CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(FactionAreasPayload.TYPE, FactionAreasPayload.CODEC);
 
         ClientPlayNetworking.registerGlobalReceiver(ServerAuthPayload.TYPE, (payload, context) ->
                 context.client().execute(() -> {
@@ -56,6 +62,14 @@ public final class ServerAccessController {
 
         ClientPlayNetworking.registerGlobalReceiver(NpcMarkersPayload.TYPE, (payload, context) ->
                 context.client().execute(() -> npcMarkers = parseNpcMarkers(payload.data()))
+        );
+
+        ClientPlayNetworking.registerGlobalReceiver(ZoneMarkersPayload.TYPE, (payload, context) ->
+                context.client().execute(() -> zoneMarkers = parseZoneMarkers(payload.data()))
+        );
+
+        ClientPlayNetworking.registerGlobalReceiver(FactionAreasPayload.TYPE, (payload, context) ->
+                context.client().execute(() -> factionAreas = parseFactionAreas(payload.data()))
         );
 
         ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> {
@@ -102,6 +116,8 @@ public final class ServerAccessController {
     public boolean hasCityMap() { return hasCityMap; }
     public boolean hasAnyMapItem() { return hasCompass || hasCityMap; }
     public List<NpcMarker> npcMarkers() { return npcMarkers; }
+    public List<ZoneMarker> zoneMarkers() { return zoneMarkers; }
+    public List<FactionAreaMarker> factionAreas() { return factionAreas; }
 
     public void showUnavailableMessage(Minecraft client) {
         if (client == null || client.player == null) return;
@@ -131,6 +147,8 @@ public final class ServerAccessController {
         hasCityMap = false;
         connectedHost = "";
         npcMarkers = List.of();
+        zoneMarkers = List.of();
+        factionAreas = List.of();
         nextRequestAt = 0L;
     }
 
@@ -146,6 +164,67 @@ public final class ServerAccessController {
                 result.add(new NpcMarker(UUID.fromString(parts[0]), Double.parseDouble(parts[1]), Double.parseDouble(parts[2])));
             } catch (RuntimeException ignored) {}
         }
+        return Collections.unmodifiableList(result);
+    }
+
+    private static List<ZoneMarker> parseZoneMarkers(String raw) {
+        if (raw == null || raw.isBlank()) return List.of();
+
+        List<ZoneMarker> result = new ArrayList<>();
+        String[] rows = raw.split("\\n");
+        Base64.Decoder decoder = Base64.getUrlDecoder();
+
+        for (String row : rows) {
+            if (row == null || row.isBlank()) continue;
+            String[] parts = row.split("\\t", 7);
+            if (parts.length != 7) continue;
+
+            try {
+                String id = new String(decoder.decode(parts[0]), StandardCharsets.UTF_8);
+                String name = new String(decoder.decode(parts[1]), StandardCharsets.UTF_8);
+                int minX = Integer.parseInt(parts[2]);
+                int minZ = Integer.parseInt(parts[3]);
+                int maxX = Integer.parseInt(parts[4]);
+                int maxZ = Integer.parseInt(parts[5]);
+                String preset = parts[6];
+
+                result.add(new ZoneMarker(id, name, minX, minZ, maxX, maxZ, preset));
+            } catch (RuntimeException ignored) {
+            }
+        }
+
+        return Collections.unmodifiableList(result);
+    }
+
+
+    private static List<FactionAreaMarker> parseFactionAreas(String raw) {
+        if (raw == null || raw.isBlank()) return List.of();
+
+        List<FactionAreaMarker> result = new ArrayList<>();
+        Base64.Decoder decoder = Base64.getUrlDecoder();
+
+        for (String row : raw.split("\\n")) {
+            if (row == null || row.isBlank()) continue;
+            String[] parts = row.split("\\t", 9);
+            if (parts.length != 9) continue;
+
+            try {
+                String id = new String(decoder.decode(parts[0]), StandardCharsets.UTF_8);
+                String kind = parts[1];
+                String label = new String(decoder.decode(parts[2]), StandardCharsets.UTF_8);
+                String owner = new String(decoder.decode(parts[3]), StandardCharsets.UTF_8);
+                String color = parts[4];
+                int minX = Integer.parseInt(parts[5]);
+                int minZ = Integer.parseInt(parts[6]);
+                int maxX = Integer.parseInt(parts[7]);
+                int maxZ = Integer.parseInt(parts[8]);
+
+                result.add(new FactionAreaMarker(id, kind, label, owner, color,
+                        minX, minZ, maxX, maxZ));
+            } catch (RuntimeException ignored) {
+            }
+        }
+
         return Collections.unmodifiableList(result);
     }
 

@@ -18,6 +18,9 @@ public final class WorldMapScreen extends Screen {
     private final MinimapConfig config;
     private final MapViewRenderer renderer;
     private final KeyMapping worldMapKey;
+    private final ServerAccessController access;
+    private final ZoneOverlayRenderer zoneOverlay;
+    private final FactionOverlayRenderer factionOverlay;
     private double centerX, centerZ;
     private double currentBpp;
     private double targetBpp;
@@ -28,11 +31,16 @@ public final class WorldMapScreen extends Screen {
     private double anchorScreenX, anchorScreenY;
     private double anchorWorldX, anchorWorldZ;
 
-    public WorldMapScreen(MinimapConfig config, MapViewRenderer renderer, KeyMapping worldMapKey) {
+    public WorldMapScreen(MinimapConfig config, MapViewRenderer renderer,
+                          ClientMapCache cache, ServerAccessController access,
+                          KeyMapping worldMapKey) {
         super(Component.literal("TOA World Map"));
         this.config = config;
         this.renderer = renderer;
         this.worldMapKey = worldMapKey;
+        this.access = access;
+        this.zoneOverlay = new ZoneOverlayRenderer(cache);
+        this.factionOverlay = new FactionOverlayRenderer(cache);
         var player = net.minecraft.client.Minecraft.getInstance().player;
         if (player != null) {
             centerX = player.getX();
@@ -53,8 +61,18 @@ public final class WorldMapScreen extends Screen {
         g.fill(left - 1, top - 1, right + 1, bottom + 1, 0xFF303030);
         g.fill(left, top, right, bottom, 0xFF101010);
 
-        renderer.draw(g, minecraft, left, top, right - left, bottom - top,
-                centerX, centerZ, currentBpp, 0.0);
+        renderer.drawWorldMap(g, minecraft, left, top, right - left, bottom - top,
+                centerX, centerZ, currentBpp);
+
+        // Server-authored zones are a World Map feature only. The overlay is
+        // clipped to chunks this client has already discovered/cached.
+        zoneOverlay.drawWorldMap(g, minecraft, access,
+                left, top, right - left, bottom - top,
+                centerX, centerZ, currentBpp);
+
+        factionOverlay.draw(g, minecraft, access,
+                left, top, right - left, bottom - top,
+                centerX, centerZ, currentBpp, mouseX, mouseY);
 
         if (minecraft.player != null) {
             int px = (int)Math.round(width / 2.0 + (minecraft.player.getX() - centerX) / currentBpp);
