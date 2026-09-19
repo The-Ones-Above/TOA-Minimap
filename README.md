@@ -4,7 +4,7 @@
 
 It renders a persistent top-down map directly from Minecraft chunk data, provides a heading-up HUD minimap and full World Map, and uses a Paper companion plugin for server authorization, Citizens NPC markers, and item-based access.
 
-> **Client version:** 2.10.3  
+> **Client version:** 2.10.4  
 > **Server companion:** 1.1.0  
 > **Minecraft:** 26.2  
 > **Loader:** Fabric  
@@ -308,3 +308,13 @@ This means the World Map can show City, Spawn and any faction property/territory
 - NPC centre remains yellow.
 - Remote-player centre remains white.
 - Faction hover tooltips keep “Owned by” neutral but render the faction name itself using that faction's configured TOAFactions colour.
+
+
+## 2.10.4 live map refresh
+
+- Previously-discovered loaded chunks now refresh around the player approximately once per second.
+- Building, removing roofs/walls, roads and other surface changes now propagate to the HUD minimap.
+- The same refreshed chunk data marks the 256×256 World Map atlas region dirty, so the full World Map updates too.
+- Fixed a GPU texture ordering bug where refreshed pixels could exist in memory but the renderer returned the old chunk texture before uploading them.
+- Old chunk textures are released before replacement to avoid accumulating stale GPU textures.
+- Refreshing is limited to a small 5×5 chunk area around the player and still obeys the existing generation time budget.

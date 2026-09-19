@@ -29,6 +29,9 @@ public final class ClientMapCache implements AutoCloseable {
     public static final int REGION_BLOCKS = TILE_BLOCKS * REGION_CHUNKS;
     private static final int CACHE_MAGIC = 0x544F4135;
     private static final int SCAN_INTERVAL_TICKS = 2;
+    private static final int REFRESH_INTERVAL_TICKS = 20;
+    private static final int REFRESH_RADIUS_CHUNKS = 2;
+    private static final long MIN_CHUNK_REFRESH_MS = 900L;
     private static final int MAX_GENERATE_PER_TICK = 5;
     private static final long GENERATION_BUDGET_NS = 2_250_000L;
 
@@ -80,6 +83,14 @@ public final class ClientMapCache implements AutoCloseable {
             queueAllLoadedAroundPlayer(mc);
         }
 
+        // Previously-discovered chunks must not become permanent snapshots.
+        // Re-sample a small loaded area around the player roughly once per second
+        // so newly-built roads, roofs, walls and removed blocks appear on both the
+        // HUD minimap and the persistent World Map.
+        if (ticks % REFRESH_INTERVAL_TICKS == 0) {
+            queueRefreshAroundPlayer(mc);
+        }
+
         long start = System.nanoTime();
         int generated = 0;
         while (generated < MAX_GENERATE_PER_TICK && System.nanoTime() - start < GENERATION_BUDGET_NS) {
@@ -114,21 +125,61 @@ public final class ClientMapCache implements AutoCloseable {
         }
     }
 
+    private void queueRefreshAroundPlayer(Minecraft mc) {
+        if (mc.level == null || mc.player == null) return;
+
+        int centerChunkX = ((int)Math.floor(mc.player.getX())) >> 4;
+        int centerChunkZ = ((int)Math.floor(mc.player.getZ())) >> 4;
+        long now = System.currentTimeMillis();
+
+        // Closest chunks first. A 5x5 area is enough to catch normal building
+        // activity without continually re-scanning the entire render distance.
+        for (int ring = 0; ring <= REFRESH_RADIUS_CHUNKS; ring++) {
+            for (int dz = -ring; dz <= ring; dz++) {
+                for (int dx = -ring; dx <= ring; dx++) {
+                    if (Math.max(Math.abs(dx), Math.abs(dz)) != ring) continue;
+
+                    int cx = centerChunkX + dx;
+                    int cz = centerChunkZ + dz;
+                    if (!mc.level.hasChunk(cx, cz)) continue;
+
+                    ChunkKey key = new ChunkKey(cx, cz);
+                    Entry entry = entries.computeIfAbsent(key, k -> new Entry());
+
+                    // Don't waste work on a chunk we only know from disk but have
+                    // not actually loaded near the player yet.
+                    if (!knownChunks.contains(new ChunkCoord(cx, cz))
+                            && entry.generatedAt == 0) {
+                        continue;
+                    }
+
+                    if (now - entry.lastRefreshQueuedAt < MIN_CHUNK_REFRESH_MS) continue;
+                    entry.lastRefreshQueuedAt = now;
+                    queueGenerate(key, false);
+                }
+            }
+        }
+    }
+
     public TileTexture texture(Minecraft mc, int chunkX, int chunkZ) {
         ChunkKey key = new ChunkKey(chunkX, chunkZ);
         Entry entry = entries.computeIfAbsent(key, k -> new Entry());
         entry.lastAccess = System.currentTimeMillis();
 
-        if (entry.textureId != null) {
-            return new TileTexture(entry.textureId, TILE_BLOCKS, TILE_BLOCKS);
-        }
-
+        // A refreshed chunk may already have a GPU texture. Always consume newly
+        // generated pixels first so the old texture cannot hide an update.
         if (entry.readyPixels != null) {
             int[] pixels = entry.readyPixels;
             entry.readyPixels = null;
             entry.pixels = pixels;
             upload(key, entry, pixels);
-            if (entry.textureId != null) return new TileTexture(entry.textureId, TILE_BLOCKS, TILE_BLOCKS);
+            if (entry.textureId != null) {
+                return new TileTexture(entry.textureId, TILE_BLOCKS, TILE_BLOCKS);
+            }
+        }
+
+        if (entry.textureId != null) {
+            return new TileTexture(entry.textureId, TILE_BLOCKS, TILE_BLOCKS);
         }
 
         if (!entry.diskChecked) {
@@ -476,6 +527,15 @@ public final class ClientMapCache implements AutoCloseable {
                     ToaMinimapClient.MOD_ID,
                     "client_map/x_" + key.x + "_z_" + key.z
             );
+
+            if (entry.textureId != null) {
+                try {
+                    Minecraft.getInstance().getTextureManager().release(entry.textureId);
+                } catch (Exception ignored) {
+                    if (entry.texture != null) entry.texture.close();
+                }
+            }
+
             DynamicTexture texture = new DynamicTexture(() -> "TOA Minimap client map chunk", nativeImage);
             Minecraft.getInstance().getTextureManager().register(id, texture);
             texture.upload();
@@ -521,6 +581,7 @@ public final class ClientMapCache implements AutoCloseable {
         volatile boolean loadingDisk;
         volatile long generatedAt;
         volatile long lastAccess;
+        volatile long lastRefreshQueuedAt;
     }
 
     private static final class RegionEntry {
